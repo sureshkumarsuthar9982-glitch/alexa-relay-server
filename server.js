@@ -1,3 +1,4 @@
+
 const express = require("express");
 
 const app = express();
@@ -6,14 +7,27 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 
 // ESP32 relay states
-let relayStates = [false, false, false, false, false, false, false, false];
+let relayStates = [
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false
+];
+
+// Pending command for ESP32
+let pendingCommand = null;
 
 // Health check
 app.get("/", (req, res) => {
   res.json({
     status: "online",
     message: "Alexa Relay Server is running",
-    relays: relayStates
+    relays: relayStates,
+    pendingCommand: pendingCommand
   });
 });
 
@@ -24,9 +38,26 @@ app.get("/relays", (req, res) => {
   });
 });
 
-// Control one relay
+// ESP32 asks for a command
+app.get("/command", (req, res) => {
+  if (pendingCommand) {
+    const command = pendingCommand;
+    pendingCommand = null;
+
+    return res.json({
+      command: command
+    });
+  }
+
+  res.json({
+    command: null
+  });
+});
+
+// Individual relay
 app.post("/relay/:number", (req, res) => {
   const relayNumber = parseInt(req.params.number);
+  const { on } = req.body;
 
   if (relayNumber < 1 || relayNumber > 8) {
     return res.status(400).json({
@@ -34,49 +65,56 @@ app.post("/relay/:number", (req, res) => {
     });
   }
 
-  if (typeof req.body.on !== "boolean") {
+  if (typeof on !== "boolean") {
     return res.status(400).json({
-      error: "Use { \"on\": true } or { \"on\": false }"
+      error: "Use { on: true } or { on: false }"
     });
   }
 
-  relayStates[relayNumber - 1] = req.body.on;
+  relayStates[relayNumber - 1] = on;
 
-  console.log(
-    `Relay ${relayNumber}: ${req.body.on ? "ON" : "OFF"}`
-  );
+  pendingCommand = on
+    ? `R${relayNumber}ON`
+    : `R${relayNumber}OFF`;
 
   res.json({
     success: true,
     relay: relayNumber,
-    on: req.body.on
+    state: on ? "ON" : "OFF",
+    command: pendingCommand,
+    relays: relayStates
   });
 });
 
 // All ON
 app.post("/all/on", (req, res) => {
-  relayStates.fill(true);
+  relayStates = relayStates.map(() => true);
 
-  console.log("All relays: ON");
+  pendingCommand = "ALLON";
 
   res.json({
     success: true,
+    state: "ALL ON",
+    command: pendingCommand,
     relays: relayStates
   });
 });
 
 // All OFF
 app.post("/all/off", (req, res) => {
-  relayStates.fill(false);
+  relayStates = relayStates.map(() => false);
 
-  console.log("All relays: OFF");
+  pendingCommand = "ALLOFF";
 
   res.json({
     success: true,
+    state: "ALL OFF",
+    command: pendingCommand,
     relays: relayStates
   });
 });
 
+// Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Alexa Relay Server running on port ${PORT}`);
 });
