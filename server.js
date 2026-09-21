@@ -1,4 +1,3 @@
-
 const express = require("express");
 
 const app = express();
@@ -6,7 +5,6 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// ESP32 relay states
 let relayStates = [
   false,
   false,
@@ -18,7 +16,6 @@ let relayStates = [
   false
 ];
 
-// Pending command for ESP32
 let pendingCommand = null;
 
 // Health check
@@ -28,6 +25,63 @@ app.get("/", (req, res) => {
     message: "Alexa Relay Server is running",
     relays: relayStates,
     pendingCommand: pendingCommand
+  });
+});
+
+// Alexa request handler
+app.post("/", (req, res) => {
+  const request = req.body;
+
+  console.log("Alexa request:");
+  console.log(JSON.stringify(request, null, 2));
+
+  const requestType = request?.request?.type;
+
+  // Alexa launch request
+  if (requestType === "LaunchRequest") {
+    return res.json({
+      version: "1.0",
+      response: {
+        outputSpeech: {
+          type: "PlainText",
+          text: "My voice assistant is ready."
+        },
+        shouldEndSession: false
+      }
+    });
+  }
+
+  // Alexa intent request
+  if (requestType === "IntentRequest") {
+    return res.json({
+      version: "1.0",
+      response: {
+        outputSpeech: {
+          type: "PlainText",
+          text: "Command received. Your voice assistant is working."
+        },
+        shouldEndSession: true
+      }
+    });
+  }
+
+  // Session ended
+  if (requestType === "SessionEndedRequest") {
+    return res.json({
+      version: "1.0",
+      response: {}
+    });
+  }
+
+  return res.json({
+    version: "1.0",
+    response: {
+      outputSpeech: {
+        type: "PlainText",
+        text: "I received your request."
+      },
+      shouldEndSession: true
+    }
   });
 });
 
